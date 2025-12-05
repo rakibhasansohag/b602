@@ -1,5 +1,6 @@
 import express from 'express';
 import initDB from './config/db';
+import errorHandler from './middleware/errorHandler';
 
 const app = express();
 
@@ -21,5 +22,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use((_req, res) => {
 	res.status(404).json({ success: false, message: 'Route not found' });
 });
+
+// error handler
+app.use(errorHandler);
 
 export default app;

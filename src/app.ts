@@ -6,6 +6,7 @@ import authRoutes from './modules/auth/auth.route';
 import userRoutes from './modules/users/user.route';
 import vehicleRoutes from './modules/vehicles/vehicle.route';
 import bookingRoutes from './modules/bookings/booking.route';
+import { startCronJobs } from './utils/corn';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get('/', logger, (_req, res) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logger);
+startCronJobs();
 
 // API  base Version
 app.use('/api/v1/auth', authRoutes);

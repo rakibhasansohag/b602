@@ -21,7 +21,7 @@ const updateSchema = z.object({
 
 router.put(
 	'/:id',
-	auth('admin'),
+	auth('admin', 'customer'),
 	validate(updateSchema),
 	userController.updateUser,
 );

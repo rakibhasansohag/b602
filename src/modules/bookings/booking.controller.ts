@@ -79,6 +79,7 @@ const updateBooking = async (req: Request, res: Response) => {
 		if (req.user?.role === 'customer' && status === 'returned') {
 			return res.status(403).json({ success: false, message: 'Forbidden' });
 		}
+
 		if (req.user?.role === 'customer' && status === 'cancelled') {
 			// TODO: additional check enforced in service
 		}

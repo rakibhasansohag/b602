@@ -73,6 +73,21 @@ const createBooking = async (
 
 		await client.query('COMMIT');
 
+		// check overlapping active bookings for this vehicle
+		const overlapRes = await client.query(
+			`SELECT id FROM bookings
+  			WHERE vehicle_id = $1
+    		AND status = 'active'
+     		AND NOT (rent_end_date <= $2 OR rent_start_date >= $3)
+   			LIMIT 1`,
+			[payload.vehicle_id, payload.rent_start_date, payload.rent_end_date],
+		);
+
+		if (overlapRes.rows.length > 0) {
+			await client.query('ROLLBACK');
+			throw new Error('Vehicle already booked for the requested period');
+		}
+
 		const booking = insertBooking.rows[0] as BookingRow;
 
 		return {
@@ -167,9 +182,54 @@ const updateBookingStatus = async (
 	}
 };
 
+type ExpiredBookingRow = { id: number; vehicle_id: number };
+
+// Auto ReturnExpiredBookings
+const autoReturnExpiredBookings = async (): Promise<number> => {
+	const client = await pool.connect();
+	try {
+		await client.query('BEGIN');
+
+		// find bookings expired and still active
+		const res = await client.query(
+			`SELECT id, vehicle_id FROM bookings WHERE status = 'active' AND rent_end_date < CURRENT_DATE FOR UPDATE`,
+		);
+
+		if (res.rows.length === 0) {
+			await client.query('COMMIT');
+			return 0;
+		}
+
+		const rows = res.rows as ExpiredBookingRow[];
+		const bookingIds = rows.map((r) => r.id);
+		const vehicleIds = rows.map((r) => r.vehicle_id);
+
+		// mark bookings returned
+		await client.query(
+			`UPDATE bookings SET status = 'returned', updated_at = NOW() WHERE id = ANY($1::int[])`,
+			[bookingIds],
+		);
+
+		// set vehicles to available for affected vehicles
+		await client.query(
+			`UPDATE vehicles SET availability_status = 'available', updated_at = NOW() WHERE id = ANY($1::int[])`,
+			[vehicleIds],
+		);
+
+		await client.query('COMMIT');
+		return bookingIds.length;
+	} catch (err) {
+		await client.query('ROLLBACK');
+		throw err;
+	} finally {
+		client.release();
+	}
+};
+
 export const bookingService = {
 	createBooking,
 	getBookingsForAdmin,
 	getBookingsForCustomer,
 	updateBookingStatus,
+	autoReturnExpiredBookings,
 };

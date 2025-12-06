@@ -17,13 +17,24 @@ const getAllUsers = async (req: Request, res: Response) => {
 const updateUser = async (req: Request, res: Response) => {
 	try {
 		const { id } = req.params;
+		if (!id)
+			return res
+				.status(400)
+				.json({ success: false, message: 'User id is required' });
+
+		// Authorization: allow admin OR the owner
+		if (req.user?.role !== 'admin' && Number(req.user?.id) !== Number(id)) {
+			return res.status(403).json({ success: false, message: 'Forbidden' });
+		}
+
 		const payload = req.body;
 		const result = await userService.updateUser(Number(id), payload);
 
 		if (result.rowCount === 0)
-			return res
-				.status(404)
-				.json({ success: false, message: 'User not found' });
+			return res.status(404).json({
+				success: false,
+				message: 'User not found or no fields to update',
+			});
 
 		res.status(200).json({
 			success: true,

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { bookingService } from '../modules/bookings/booking.service';
 
 export const startCronJobs = () => {
-	// run at 00:05 every day (server timezone) — adjust schedule as needed
+	// run at 00:05 every day (server timezone) —
 	cron.schedule(
 		'5 0 * * *',
 		async () => {
@@ -16,7 +16,7 @@ export const startCronJobs = () => {
 			}
 		},
 		{
-			timezone: 'UTC', // or your server timezone; modify if needed
+			timezone: 'UTC', // server timezone
 		},
 	);
 

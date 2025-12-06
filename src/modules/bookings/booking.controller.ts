@@ -68,46 +68,94 @@ const getBookings = async (req: Request, res: Response) => {
 const updateBooking = async (req: Request, res: Response) => {
 	try {
 		const bookingId = Number(req.params.bookingId);
-		const { status } = req.body; // 'cancelled' or 'returned'
+		if (!bookingId)
+			return res
+				.status(400)
+				.json({ success: false, message: 'bookingId is required' });
 
+		const { status } = req.body; // 'cancelled' | 'returned'
 		if (!['cancelled', 'returned'].includes(status))
 			return res
 				.status(400)
 				.json({ success: false, message: 'Invalid status' });
 
-		// Authorization: customers can cancel (before start date); admin can mark as returned.
-		if (req.user?.role === 'customer' && status === 'returned') {
+		// fetch booking to check ownership & dates
+		const bookingRes = await bookingService.getBookingById(bookingId);
+		if (bookingRes.rows.length === 0)
+			return res
+				.status(404)
+				.json({ success: false, message: 'Booking not found' });
+
+		const booking = bookingRes.rows[0];
+
+		if (!booking)
+			return res
+				.status(404)
+				.json({ success: false, message: 'Booking not found' });
+
+		// Authorization: customers can only act on their own bookings
+		if (
+			req.user?.role === 'customer' &&
+			Number(req.user.id) !== Number(booking?.customer_id)
+		) {
 			return res.status(403).json({ success: false, message: 'Forbidden' });
 		}
 
+		// Extra controller-level check: customer can only cancel BEFORE start date
 		if (req.user?.role === 'customer' && status === 'cancelled') {
-			// TODO: additional check enforced in service
+			const now = new Date();
+			const start = new Date(booking.rent_start_date);
+			if (now >= start) {
+				return res.status(400).json({
+					success: false,
+					message: 'Cannot cancel booking on or after start date',
+				});
+			}
 		}
 
+		// Admin can mark returned; customer cannot mark returned
+		if (req.user?.role === 'customer' && status === 'returned') {
+			return res.status(403).json({
+				success: false,
+				message: 'Customers cannot mark bookings as returned',
+			});
+		}
+
+		// Delegate to service to do the work
 		const result = await bookingService.updateBookingStatus(
 			bookingId,
 			status as 'cancelled' | 'returned',
 		);
+
 		if (result.rowCount === 0)
 			return res
 				.status(404)
 				.json({ success: false, message: 'Booking not found' });
 
 		if (status === 'cancelled') {
-			res.status(200).json({
+			return res.status(200).json({
 				success: true,
 				message: 'Booking cancelled successfully',
 				data: result.rows[0],
 			});
 		} else {
-			res.status(200).json({
+			return res.status(200).json({
 				success: true,
 				message: 'Booking marked as returned. Vehicle is now available',
 				data: result.rows[0],
 			});
 		}
 	} catch (err: any) {
-		res.status(400).json({ success: false, message: err.message });
+		// service may throw business errors (e.g., cannot cancel after start) — map to 400
+		if (
+			err.message &&
+			/cannot cancel|Cannot cancel|already booked|Vehicle not available/i.test(
+				err.message,
+			)
+		) {
+			return res.status(400).json({ success: false, message: err.message });
+		}
+		return res.status(500).json({ success: false, message: err.message });
 	}
 };
 

@@ -226,10 +226,17 @@ const autoReturnExpiredBookings = async (): Promise<number> => {
 	}
 };
 
+const getBookingById = async (
+	bookingId: number,
+): Promise<QueryResult<BookingRow>> => {
+	return pool.query(`SELECT * FROM bookings WHERE id = $1`, [bookingId]);
+};
+
 export const bookingService = {
 	createBooking,
 	getBookingsForAdmin,
 	getBookingsForCustomer,
 	updateBookingStatus,
 	autoReturnExpiredBookings,
+	getBookingById,
 };

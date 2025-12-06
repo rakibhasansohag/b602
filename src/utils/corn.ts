@@ -1,10 +1,21 @@
 import cron from 'node-cron';
 import { bookingService } from '../modules/bookings/booking.service';
 
+
+/*
+'* * * * *' → every minute (fast tests)
+
+'0 * * * *' → top of every hour
+
+* /5 * * * * → every 5 minutes
+
+*/
+
 export const startCronJobs = () => {
 	// run at 00:05 every day (server timezone) —
 	cron.schedule(
 		'5 0 * * *',
+		// '*/1 * * * *',
 		async () => {
 			try {
 				const count = await bookingService.autoReturnExpiredBookings();

@@ -89,7 +89,7 @@ const deleteUser = async (id: number) => {
 				oid: 0,
 				rows: [],
 				fields: [],
-			} as QueryResult<any>;
+			} as QueryResult;
 		}
 
 		// check active bookings

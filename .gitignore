@@ -2,3 +2,6 @@ node_modules
 .env
 open.bat
 /dist
+.vercel
+bulk_script.js
+bulk_test.js

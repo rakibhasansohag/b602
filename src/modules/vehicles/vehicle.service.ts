@@ -84,8 +84,20 @@ const updateVehicle = async (
 };
 
 const deleteVehicle = async (id: number) => {
-	// TODO: Deletion constraint (active bookings) should be checked in controller/service consumer before calling delete.
-	return pool.query(`DELETE FROM vehicles WHERE id = $1`, [id]);
+	// Check for active bookings for this vehicle
+	const bookingCheck = await pool.query(
+		`SELECT COUNT(*)::int AS active_count FROM bookings WHERE vehicle_id = $1 AND status = 'active'`,
+		[id],
+	);
+
+	const activeCount = bookingCheck.rows[0]?.active_count ?? 0;
+
+	if (activeCount > 0) {
+		throw new Error('Vehicle has active bookings');
+	}
+
+	// Safe to delete (returning id so controller can inspect rowCount/rows)
+	return pool.query(`DELETE FROM vehicles WHERE id = $1 RETURNING id`, [id]);
 };
 
 export const vehicleService = {

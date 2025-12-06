@@ -84,17 +84,21 @@ const deleteVehicle = async (req: Request, res: Response) => {
 			.status(400)
 			.json({ success: false, message: 'vehicleId required' });
 	try {
-		// TODO : check active bookings BEFORE delete: assume bookingsService has checkActiveBookingsForVehicle
-		// TODO :  Controller should call that  or use bookingService to check rowCount > 0
 		const result = await vehicleService.deleteVehicle(id);
+
 		if (result.rowCount === 0)
 			return res
 				.status(404)
 				.json({ success: false, message: 'Vehicle not found' });
-		res
+
+		return res
 			.status(200)
 			.json({ success: true, message: 'Vehicle deleted successfully' });
 	} catch (err: any) {
+		if (err.message === 'Vehicle has active bookings') {
+			return res.status(400).json({ success: false, message: err.message });
+		}
+
 		res.status(500).json({ success: false, message: err.message });
 	}
 };

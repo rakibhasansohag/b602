@@ -84,21 +84,52 @@ const updateVehicle = async (
 };
 
 const deleteVehicle = async (id: number) => {
-	// Check for active bookings for this vehicle
-	const bookingCheck = await pool.query(
-		`SELECT COUNT(*)::int AS active_count FROM bookings WHERE vehicle_id = $1 AND status = 'active'`,
-		[id],
-	);
+	const client = await pool.connect();
+	try {
+		await client.query('BEGIN');
 
-	const activeCount = bookingCheck.rows[0]?.active_count ?? 0;
+		// lock vehicle row
+		const vRes = await client.query(
+			`SELECT id FROM vehicles WHERE id = $1 FOR UPDATE`,
+			[id],
+		);
 
-	if (activeCount > 0) {
-		throw new Error('Vehicle has active bookings');
+		if (vRes.rows.length === 0) {
+			await client.query('ROLLBACK');
+			return {
+				command: 'DELETE',
+				rowCount: 0,
+				oid: 0,
+				rows: [],
+				fields: [],
+			} as QueryResult<any>;
+		}
+
+		// check active bookings
+		const bookingCheck = await client.query(
+			`SELECT COUNT(*)::int AS active_count FROM bookings WHERE vehicle_id = $1 AND status = 'active'`,
+			[id],
+		);
+		const activeCount = bookingCheck.rows[0]?.active_count ?? 0;
+		if (activeCount > 0) {
+			await client.query('ROLLBACK');
+			throw new Error('Vehicle has active bookings');
+		}
+
+		const del = await client.query(
+			`DELETE FROM vehicles WHERE id = $1 RETURNING id`,
+			[id],
+		);
+		await client.query('COMMIT');
+		return del;
+	} catch (err) {
+		await client.query('ROLLBACK');
+		throw err;
+	} finally {
+		client.release();
 	}
-
-	// Safe to delete (returning id so controller can inspect rowCount/rows)
-	return pool.query(`DELETE FROM vehicles WHERE id = $1 RETURNING id`, [id]);
 };
+
 
 export const vehicleService = {
 	createVehicle,

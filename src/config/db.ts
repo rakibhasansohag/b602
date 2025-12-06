@@ -1,5 +1,9 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import config from './index';
+
+types.setTypeParser(types.builtins.NUMERIC, (value: string) => {
+	return parseFloat(value);
+});
 
 export const pool = new Pool({
 	connectionString: config.CONNECTION_STRING,

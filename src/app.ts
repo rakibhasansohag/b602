@@ -4,6 +4,7 @@ import errorHandler from './middleware/errorHandler';
 import logger from './middleware/logger';
 import authRoutes from './modules/auth/auth.route';
 import userRoutes from './modules/users/user.route';
+import vehicleRoutes from './modules/vehicles/vehicle.route';
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(logger);
 // API  base Version
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/vehicles', vehicleRoutes);
 
 
 // not found

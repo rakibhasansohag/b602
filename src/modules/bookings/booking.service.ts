@@ -114,10 +114,27 @@ const createBooking = async (
 	}
 };
 
-
 const getBookingsForAdmin = async (): Promise<QueryResult<any>> => {
 	return pool.query(`
-    SELECT b.*, u.name AS customer_name, v.vehicle_name, v.registration_number
+    SELECT
+      b.id,
+      b.customer_id,
+      b.vehicle_id,
+      TO_CHAR(b.rent_start_date, 'YYYY-MM-DD') AS rent_start_date,
+      TO_CHAR(b.rent_end_date, 'YYYY-MM-DD') AS rent_end_date,
+      b.total_price,
+      b.status,
+      -- optional meta
+      TO_CHAR(b.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+      TO_CHAR(b.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+      json_build_object(
+        'name', u.name,
+        'email', u.email
+      ) AS customer,
+      json_build_object(
+        'vehicle_name', v.vehicle_name,
+        'registration_number', v.registration_number
+      ) AS vehicle
     FROM bookings b
     JOIN users u ON u.id = b.customer_id
     JOIN vehicles v ON v.id = b.vehicle_id
@@ -129,7 +146,26 @@ const getBookingsForCustomer = async (
 	customerId: number,
 ): Promise<QueryResult<any>> => {
 	return pool.query(
-		`SELECT b.*, v.vehicle_name, v.registration_number, v.type FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id WHERE b.customer_id = $1 ORDER BY b.created_at DESC`,
+		`
+    SELECT
+      b.id,
+      b.vehicle_id,
+      TO_CHAR(b.rent_start_date, 'YYYY-MM-DD') AS rent_start_date,
+      TO_CHAR(b.rent_end_date, 'YYYY-MM-DD') AS rent_end_date,
+      b.total_price,
+      b.status,
+      TO_CHAR(b.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+      TO_CHAR(b.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+      json_build_object(
+        'vehicle_name', v.vehicle_name,
+        'registration_number', v.registration_number,
+        'type', v.type
+      ) AS vehicle
+    FROM bookings b
+    JOIN vehicles v ON v.id = b.vehicle_id
+    WHERE b.customer_id = $1
+    ORDER BY b.created_at DESC
+    `,
 		[customerId],
 	);
 };

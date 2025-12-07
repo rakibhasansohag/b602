@@ -9,6 +9,8 @@ const router = Router();
 // admin-only access
 router.get('/', auth('admin'), userController.getAllUsers);
 
+// router.get('/:id', auth('admin', 'customer'), userController.getUser);
+
 // admin or owner update: we'll validate body with zod
 const updateSchema = z.object({
 	body: z.object({
@@ -26,5 +28,6 @@ router.put(
 	userController.updateUser,
 );
 router.delete('/:id', auth('admin'), userController.deleteUser);
+
 
 export default router;

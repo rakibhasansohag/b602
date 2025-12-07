@@ -32,6 +32,7 @@ router.post(
 	bookingController.createBooking,
 );
 router.get('/', auth('admin', 'customer'), bookingController.getBookings);
+
 router.put(
 	'/:bookingId',
 	auth('admin', 'customer'),

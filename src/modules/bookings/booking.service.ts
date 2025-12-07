@@ -25,7 +25,7 @@ const createBooking = async (
 	try {
 		await client.query('BEGIN');
 
-		// lock vehicle row for update
+		// lock vehicle row
 		const vehicleRes = await client.query(
 			`SELECT id, vehicle_name, daily_rent_price, availability_status FROM vehicles WHERE id = $1 FOR UPDATE`,
 			[payload.vehicle_id],
@@ -35,11 +35,16 @@ const createBooking = async (
 			return null;
 		}
 		const vehicle = vehicleRes.rows[0];
+
+		// If you want to disallow booking when availability_status !== 'available'
+		// keep this check. If you want to allow future bookings even when status=booked,
+		// change logic accordingly.
 		if (vehicle.availability_status !== 'available') {
 			await client.query('ROLLBACK');
 			throw new Error('Vehicle not available');
 		}
 
+		// parse & validate dates
 		const start = new Date(payload.rent_start_date);
 		const end = new Date(payload.rent_end_date);
 		if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
@@ -49,7 +54,24 @@ const createBooking = async (
 			);
 		}
 
-		const days = daysBetween(start, end); // e.g., 2026-01-15 to 2026-01-20 -> 5
+		// Check for overlapping active bookings BEFORE inserting
+		const overlapRes = await client.query(
+			`SELECT id FROM bookings
+       WHERE vehicle_id = $1
+         AND status = 'active'
+         AND NOT (rent_end_date <= $2 OR rent_start_date >= $3)
+       LIMIT 1`,
+			[payload.vehicle_id, payload.rent_start_date, payload.rent_end_date],
+		);
+
+		if (overlapRes.rows.length > 0) {
+			await client.query('ROLLBACK');
+			throw new Error('Vehicle already booked for the requested period');
+		}
+
+		// No overlap  insert booking
+		const msPerDay = 1000 * 60 * 60 * 24;
+		const days = Math.floor((end.getTime() - start.getTime()) / msPerDay); // number of full days
 		const totalPrice = Number(vehicle.daily_rent_price) * days;
 
 		const insertBooking = await client.query(
@@ -66,6 +88,7 @@ const createBooking = async (
 			],
 		);
 
+		// Mark vehicle as booked
 		await client.query(
 			`UPDATE vehicles SET availability_status = 'booked', updated_at = NOW() WHERE id = $1`,
 			[payload.vehicle_id],
@@ -73,23 +96,7 @@ const createBooking = async (
 
 		await client.query('COMMIT');
 
-		// check overlapping active bookings for this vehicle
-		const overlapRes = await client.query(
-			`SELECT id FROM bookings
-  			WHERE vehicle_id = $1
-    		AND status = 'active'
-     		AND NOT (rent_end_date <= $2 OR rent_start_date >= $3)
-   			LIMIT 1`,
-			[payload.vehicle_id, payload.rent_start_date, payload.rent_end_date],
-		);
-
-		if (overlapRes.rows.length > 0) {
-			await client.query('ROLLBACK');
-			throw new Error('Vehicle already booked for the requested period');
-		}
-
 		const booking = insertBooking.rows[0] as BookingRow;
-
 		return {
 			booking,
 			vehicle: {
@@ -98,12 +105,15 @@ const createBooking = async (
 			},
 		};
 	} catch (err) {
-		await client.query('ROLLBACK');
+		await client.query('ROLLBACK').catch(() => {
+			/* ignore rollback errors */
+		});
 		throw err;
 	} finally {
 		client.release();
 	}
 };
+
 
 const getBookingsForAdmin = async (): Promise<QueryResult<any>> => {
 	return pool.query(`

@@ -34,7 +34,7 @@ const updateSchema = z.object({
 				z.literal('SUV'),
 			])
 			.optional(),
-		registration_number: z.string().optional(),
+		// registration_number: z.string().optional(),
 		daily_rent_price: z.number().positive().optional(),
 		availability_status: z
 			.union([z.literal('available'), z.literal('booked')])

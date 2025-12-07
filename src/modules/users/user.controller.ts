@@ -22,13 +22,17 @@ const updateUser = async (req: Request, res: Response) => {
 				.status(400)
 				.json({ success: false, message: 'User id is required' });
 
-		// Authorization: allow admin OR the owner
-		if (req.user?.role !== 'admin' && Number(req.user?.id) !== Number(id)) {
-			return res.status(403).json({ success: false, message: 'Forbidden' });
-		}
+		if (!req.user)
+			return res
+				.status(401)
+				.json({ success: false, message: 'Unauthorized Access!' });
+
+		const actor = req.user
+			? { id: Number(req.user.id), role: req.user.role as 'admin' | 'customer' }
+			: null;
 
 		const payload = req.body;
-		const result = await userService.updateUser(Number(id), payload);
+		const result = await userService.updateUser(actor, Number(id), payload);
 
 		if (result.rowCount === 0)
 			return res.status(404).json({
@@ -42,7 +46,16 @@ const updateUser = async (req: Request, res: Response) => {
 			data: result.rows[0],
 		});
 	} catch (err: any) {
-		res.status(500).json({ success: false, message: err.message });
+		if (err.message === 'Unauthorized')
+			return res.status(401).json({ success: false, message: err.message });
+		if (err.message === 'Forbidden')
+			return res.status(403).json({ success: false, message: err.message });
+
+		if (err.message && /unique|email|invalid/i.test(err.message)) {
+			return res.status(400).json({ success: false, message: err.message });
+		}
+
+		return res.status(500).json({ success: false, message: err.message });
 	}
 };
 

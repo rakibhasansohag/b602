@@ -53,10 +53,13 @@ const updateVehicle = async (
 		fields.push(`type = $${idx++}`);
 		values.push(payload.type);
 	}
-	if (payload.registration_number !== undefined) {
-		fields.push(`registration_number = $${idx++}`);
-		values.push(payload.registration_number);
-	}
+
+	// HIGHLIGHT : AK VAI BOLLO REGISTRATION NUMBER Allowed nah korte
+	// if (payload.registration_number !== undefined) {
+	// 	fields.push(`registration_number = $${idx++}`);
+	// 	values.push(payload.registration_number);
+	// }
+
 	if (payload.daily_rent_price !== undefined) {
 		fields.push(`daily_rent_price = $${idx++}`);
 		values.push(payload.daily_rent_price);

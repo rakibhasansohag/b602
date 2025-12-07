@@ -20,41 +20,52 @@ export type UserUpdatable = {
 	password?: string;
 };
 
+type Actor = { id: number; role: 'admin' | 'customer' } | null;
+
 const getAllUsers = async (): Promise<QueryResult<UserRow>> => {
 	return pool.query(`SELECT id, name, email, phone, role FROM users`);
 };
 
 const updateUser = async (
-	id: number,
+	actor: Actor,
+	targetId: number,
 	payload: UserUpdatable,
 ): Promise<QueryResult<UserRow>> => {
-	const fields: string[] = [];
-	const values: (string | number)[] = [];
-	let idx = 1;
+	// Authorization
+	if (!actor) {
+		const err = new Error('Unauthorized');
+		(err as any).code = 'Unauthorized';
+		throw err;
+	}
 
-	if (payload.name !== undefined) {
-		fields.push(`name = $${idx++}`);
-		values.push(payload.name);
+	const isAdmin = actor.role === 'admin';
+	const isOwner = Number(actor.id) === Number(targetId);
+
+	if (!isAdmin && !isOwner) {
+		const err = new Error('Forbidden Access');
+		(err as any).code = 'Forbidden';
+		throw err;
 	}
-	if (payload.email !== undefined) {
-		fields.push(`email = $${idx++}`);
-		values.push(payload.email.toLowerCase());
-	}
-	if (payload.phone !== undefined) {
-		fields.push(`phone = $${idx++}`);
-		values.push(payload.phone);
-	}
-	if (payload.role !== undefined) {
-		fields.push(`role = $${idx++}`);
-		values.push(payload.role);
-	}
+
+	// Build sanitized payload - only allow role change when admin
+	const sanitized: Partial<UserUpdatable> = {};
+	if (payload.name !== undefined) sanitized.name = payload.name;
+	if (payload.email !== undefined)
+		sanitized.email = (payload.email as string).toLowerCase();
+	if (payload.phone !== undefined) sanitized.phone = payload.phone;
+
 	if (payload.password !== undefined) {
-		const hashed = await bcrypt.hash(payload.password, 10);
-		fields.push(`password = $${idx++}`);
-		values.push(hashed);
+		// Hash password
+		const hashed = await bcrypt.hash(payload.password as string, 10);
+		sanitized.password = hashed;
 	}
 
-	if (fields.length === 0) {
+	if (isAdmin && payload.role !== undefined) {
+		sanitized.role = payload.role;
+	} // owner cannot set role
+
+	// If nothing to update
+	if (Object.keys(sanitized).length === 0) {
 		return {
 			command: 'UPDATE',
 			rowCount: 0,
@@ -64,7 +75,33 @@ const updateUser = async (
 		} as QueryResult<UserRow>;
 	}
 
-	values.push(id); // final param
+	// Dynamic update builder
+	const fields: string[] = [];
+	const values: (string | number)[] = [];
+	let idx = 1;
+
+	if (sanitized.name !== undefined) {
+		fields.push(`name = $${idx++}`);
+		values.push(sanitized.name as string);
+	}
+	if (sanitized.email !== undefined) {
+		fields.push(`email = $${idx++}`);
+		values.push(sanitized.email as string);
+	}
+	if (sanitized.phone !== undefined) {
+		fields.push(`phone = $${idx++}`);
+		values.push(sanitized.phone as string);
+	}
+	if (sanitized.role !== undefined) {
+		fields.push(`role = $${idx++}`);
+		values.push(sanitized.role as string);
+	}
+	if (sanitized.password !== undefined) {
+		fields.push(`password = $${idx++}`);
+		values.push(sanitized.password as string);
+	}
+
+	values.push(targetId); // final param
 	const query = `UPDATE users SET ${fields.join(
 		', ',
 	)}, updated_at = NOW() WHERE id = $${idx} RETURNING id, name, email, phone, role`;

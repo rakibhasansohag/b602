@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { vehicleService } from './vehicle.service';
+import { startCronJobs } from '../../utils/corn';
 
 const createVehicle = async (req: Request, res: Response) => {
 	try {
@@ -17,6 +18,9 @@ const createVehicle = async (req: Request, res: Response) => {
 
 const getAllVehicles = async (_req: Request, res: Response) => {
 	try {
+		// clear all the cron jobs(Return the bookings that are expired)
+		startCronJobs();
+
 		const result = await vehicleService.getAllVehicles();
 		if (result.rows.length === 0)
 			return res
@@ -54,14 +58,23 @@ const getVehicleById = async (req: Request, res: Response) => {
 	}
 };
 
+/*
+
+PROBLEM HERE
+Access: Admin only
+Description: Update vehicle details, price, or availability status
+currently i am giving them full body with the vehicle  id
+*/
 const updateVehicle = async (req: Request, res: Response) => {
 	const id = Number(req.params.vehicleId || req.params.id);
 	if (!id)
 		return res
 			.status(400)
 			.json({ success: false, message: 'vehicleId required' });
+
 	try {
 		const result = await vehicleService.updateVehicle(id, req.body);
+
 		if (result.rowCount === 0)
 			return res.status(404).json({
 				success: false,

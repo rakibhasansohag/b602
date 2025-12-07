@@ -173,13 +173,15 @@ const getBookingsForCustomer = async (
 const updateBookingStatus = async (
 	bookingId: number,
 	status: 'cancelled' | 'returned',
-): Promise<QueryResult<any>> => {
-	// For 'cancelled' we should set vehicle to 'available' if appropriate; for 'returned' we also make available.
+): Promise<{
+	updateRes: QueryResult<any>;
+	vehicle?: { availability_status: string };
+}> => {
 	const client = await pool.connect();
 	try {
 		await client.query('BEGIN');
 
-		// Get booking
+		// Lock booking row
 		const bookingRes = await client.query(
 			`SELECT * FROM bookings WHERE id = $1 FOR UPDATE`,
 			[bookingId],
@@ -187,18 +189,19 @@ const updateBookingStatus = async (
 		if (bookingRes.rows.length === 0) {
 			await client.query('ROLLBACK');
 			return {
-				command: 'UPDATE',
-				rowCount: 0,
-				oid: 0,
-				rows: [],
-				fields: [],
-			} as QueryResult<any>;
+				updateRes: {
+					command: 'UPDATE',
+					rowCount: 0,
+					oid: 0,
+					rows: [],
+					fields: [],
+				} as QueryResult<any>,
+			};
 		}
 		const booking = bookingRes.rows[0];
 
-		// business rules:
+		// Business rule for cancellation: only allowed before start date
 		if (status === 'cancelled') {
-			// allow cancellation only before start date
 			const today = new Date();
 			const start = new Date(booking.rent_start_date);
 			if (today >= start) {
@@ -207,21 +210,30 @@ const updateBookingStatus = async (
 			}
 		}
 
+		// Update booking row
 		const updateRes = await client.query(
 			`UPDATE bookings SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
 			[status, bookingId],
 		);
 
-		// update vehicle availability
+		// When either cancelled or returned, set vehicle to available
+		// (business rule: one booking blocks vehicle; when booking ends/cancelled, free vehicle)
 		await client.query(
 			`UPDATE vehicles SET availability_status = 'available', updated_at = NOW() WHERE id = $1`,
 			[booking.vehicle_id],
 		);
 
 		await client.query('COMMIT');
-		return updateRes;
+
+		// Return updated booking and vehicle status
+		return {
+			updateRes,
+			vehicle: { availability_status: 'available' },
+		};
 	} catch (err) {
-		await client.query('ROLLBACK');
+		await client.query('ROLLBACK').catch(() => {
+			// Ignore rollback errors
+		});
 		throw err;
 	} finally {
 		client.release();

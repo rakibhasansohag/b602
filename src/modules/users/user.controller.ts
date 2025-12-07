@@ -46,9 +46,9 @@ const updateUser = async (req: Request, res: Response) => {
 			data: result.rows[0],
 		});
 	} catch (err: any) {
-		if (err.message === 'Unauthorized')
+		if (err.message === 'Unauthorized Access')
 			return res.status(401).json({ success: false, message: err.message });
-		if (err.message === 'Forbidden')
+		if (err.message === 'Forbidden Access')
 			return res.status(403).json({ success: false, message: err.message });
 
 		if (err.message && /unique|email|invalid/i.test(err.message)) {
